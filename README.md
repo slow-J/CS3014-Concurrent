@@ -1,2 +1,3 @@
 # CS3014-Concurrent
-OpenMP
+OpenMP  
+gcc -fopenmp conv-harness.c
