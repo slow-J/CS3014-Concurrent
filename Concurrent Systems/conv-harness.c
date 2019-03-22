@@ -6,7 +6,9 @@
    pixels of the image.
 
    Author: David Gregg
-   Date:   February 2019
+   Date:   March 2019
+
+   Version 1.6 : Modified the code so that the input tensor is float
 
    Version 1.5 : Modified the code so that the input and kernel
                  are tensors of 16-bit integer values
@@ -35,8 +37,6 @@
 #include <math.h>
 #include <stdint.h>
 
-//if SSE #include <x86intrin.h>
-
 /* the following two definitions of DEBUGGING control whether or not
    debugging information is written out. To put the program into
    debugging mode, uncomment the following line: */
@@ -61,6 +61,7 @@ void write_out(int16_t *** a, int dim0, int dim1, int dim2)
     }
   }
 }
+
 
 /* create new empty 4d float matrix */
 float **** new_empty_4d_matrix_float(int dim0, int dim1, int dim2, int dim3)
@@ -192,6 +193,59 @@ struct timeval seedtime;
   return result;
 }
 
+
+/* create a matrix and fill it with random numbers */
+float **** gen_random_4d_matrix_float(int dim0, int dim1, int dim2, int dim3)
+{
+float **** result;
+int i, j, k, l;
+struct timeval seedtime;
+  int seed;
+
+  result = new_empty_4d_matrix_float(dim0, dim1, dim2, dim3);
+
+  /* use the microsecond part of the current time as a pseudorandom seed */
+  gettimeofday(&seedtime, NULL);
+  seed = seedtime.tv_usec;
+  srandom(seed);
+
+  /* fill the matrix with random numbers */
+  const int range = 1 << 12; // 2^12
+  const int bias = 1 << 10; // 2^16
+  int16_t offset = 0.0;
+  for ( i = 0; i < dim0; i++ ) {
+    for ( j = 0; j < dim1; j++ ) {
+      for ( k = 0; k < dim2; k++ ) {
+        for ( l = 0; l < dim3; l++ ) {
+          // generate uniform random integer with mean of zero
+          long long rand = random();
+          // now cut down the range and bias the mean to reduce
+          // the likelihood of large floating point round-off errors
+          int reduced_range = (rand % range);
+          result[i][j][k][l] = reduced_range + bias;
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+
+/* create a matrix and fill it with random numbers */
+float *** gen_random_3d_matrix_float(int dim0, int dim1, int dim2)
+{
+  float **** mat4d;
+  float *** mat3d;
+
+  // create a 4d matrix with single first dimension
+  mat4d = gen_random_4d_matrix_float(1, dim0, dim1, dim2);
+  // now throw away out first dimension
+  mat3d = mat4d[0];
+  free(mat4d);
+  return mat3d;
+}
+
 /* create a matrix and fill it with random numbers */
 int16_t *** gen_random_3d_matrix_int16(int dim0, int dim1, int dim2)
 {
@@ -236,7 +290,7 @@ void check_result(float *** result, float *** control,
 }
 
 /* the slow but correct version of matmul written by David */
-void multichannel_conv(int16_t *** image, int16_t **** kernels,
+void multichannel_conv(float *** image, int16_t **** kernels,
 		       float *** output, int width, int height,
 		       int nchannels, int nkernels, int kernel_order)
 {
@@ -260,22 +314,22 @@ void multichannel_conv(int16_t *** image, int16_t **** kernels,
 }
 
 /* the fast version of matmul written by the team */
-void team_conv(int16_t *** image, int16_t **** kernels, float *** output,
+void team_conv(float *** image, int16_t **** kernels, float *** output,
                int width, int height, int nchannels, int nkernels,
                int kernel_order)
 {
+  
   int h, w, x, y, c, m;
   double sum0, sum1, sum2, sum3, sum4, sum5, sum6, sum7, imageCalc;
+  sum0 = sum1 = sum2 = sum3 = sum4 = sum5 = sum6 =sum7 = 0.0;
   // #pragma omp parallel shared(sum) 
-  #pragma omp for
+  #pragma omp parallel for num_threads(400) collapse(3)
   for ( m = 0; m < nkernels; m+=8 ) //no of kernels
   {
     for ( w = 0; w < width; w++ ) 
     {
       for ( h = 0; h < height; h++ )
-      {
-        sum0 = sum1 = sum2 = sum3 = sum4 = sum5 = sum6 =sum7 = 0.0;
-       
+      {        
         for ( c = 0; c < nchannels; c++ ) 
         {
         //size, if 3= 3x3 matrix    
@@ -302,7 +356,6 @@ void team_conv(int16_t *** image, int16_t **** kernels, float *** output,
             }
           }
          // #pragma omp barrier
-         
         }
         output[m][w][h] = (float) sum0;
         output[m+1][w][h] = (float) sum1;
@@ -312,6 +365,7 @@ void team_conv(int16_t *** image, int16_t **** kernels, float *** output,
         output[m+5][w][h] = (float) sum5;
         output[m+6][w][h] = (float) sum6;
         output[m+7][w][h] = (float) sum7;     
+        sum0 = sum1 = sum2 = sum3 = sum4 = sum5 = sum6 =sum7 = 0.0;
       }
     }
   }
@@ -324,7 +378,8 @@ int main(int argc, char ** argv)
   //float kernels[M][C][K][K];
   //float output[M][W][H];
   
-  int16_t *** image, **** kernels;
+  float *** image;
+  int16_t **** kernels;
   float *** control_output, *** output;
   long long mul_time;
   int width, height, kernel_order, nchannels, nkernels;
@@ -354,7 +409,7 @@ int main(int argc, char ** argv)
   }
 
   /* allocate the matrices */
-  image = gen_random_3d_matrix_int16(width+kernel_order, height + kernel_order,
+  image = gen_random_3d_matrix_float(width+kernel_order, height + kernel_order,
                                nchannels);
   kernels = gen_random_4d_matrix_int16(nkernels, nchannels, kernel_order, kernel_order);
   output = new_empty_3d_matrix_float(nkernels, width, height);
