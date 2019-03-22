@@ -323,7 +323,7 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
   double sum0, sum1, sum2, sum3, sum4, sum5, sum6, sum7, imageCalc;
   sum0 = sum1 = sum2 = sum3 = sum4 = sum5 = sum6 =sum7 = 0.0;
   // #pragma omp parallel shared(sum) 
-  #pragma omp parallel for num_threads(400) collapse(3)
+  #pragma omp parallel for num_threads(8) collapse(3) if (nkernels>500)
   for ( m = 0; m < nkernels; m+=8 ) //no of kernels
   {
     for ( w = 0; w < width; w++ ) 
