@@ -325,7 +325,7 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
   double sum0, sum1, sum2, sum3, sum4, sum5, sum6, sum7, sum8, sum9, sum10, sum11, sum12, sum13, sum14, sum15, imageCalc;
   sum0 = sum1 = sum2 = sum3 = sum4 = sum5 = sum6 =sum7 = sum8 = sum9 = sum10 = sum11 = sum12 = sum13 = sum14 =sum15 = 0.0;
   // #pragma omp parallel shared(sum) 
-  #pragma omp parallel for if(nkernels>60) collapse(3) schedule(dynamic, 140) 
+  #pragma omp parallel for collapse(3) 
   for ( m = 0; m < nkernels; m+=16 ) //no of kernels
   {
     for ( w = 0; w < width; w++ ) 
@@ -335,24 +335,25 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
         for ( c = 0; c < nchannels; c++ ) 
         {
         //size, if 3= 3x3 matrix    
-          //#pragma omp simd
+          
           for ( y = 0; y < kernel_order; y++ )
           {
+            //#pragma omp for
             for  ( x = 0; x < kernel_order; x++) 
             {            
               //c = c1;
               imageCalc = (double) image[w+x][h+y][c];
 
-              
-              sum0 += imageCalc * (double) kernels[m][c][x][y];
-		          sum1 += imageCalc * (double) kernels[m+1][c][x][y];
-		          sum2 += imageCalc * (double) kernels[m+2][c][x][y];
-		          sum3 += imageCalc * (double) kernels[m+3][c][x][y];
-		          sum4 += imageCalc * (double) kernels[m+4][c][x][y];
-		          sum5 += imageCalc * (double) kernels[m+5][c][x][y];
-		          sum6 += imageCalc * (double) kernels[m+6][c][x][y];
-		          sum7 += imageCalc * (double) kernels[m+7][c][x][y];
-				    sum8 += imageCalc * (double) kernels[m+8][c][x][y];
+              {
+                sum0 += imageCalc * (double) kernels[m][c][x][y];
+		        sum1 += imageCalc * (double) kernels[m+1][c][x][y];
+		        sum2 += imageCalc * (double) kernels[m+2][c][x][y];
+		        sum3 += imageCalc * (double) kernels[m+3][c][x][y];
+		        sum4 += imageCalc * (double) kernels[m+4][c][x][y];
+		        sum5 += imageCalc * (double) kernels[m+5][c][x][y];
+		        sum6 += imageCalc * (double) kernels[m+6][c][x][y];
+		        sum7 += imageCalc * (double) kernels[m+7][c][x][y];
+				sum8 += imageCalc * (double) kernels[m+8][c][x][y];
 		        sum9 += imageCalc * (double) kernels[m+9][c][x][y];
 		        sum10 += imageCalc * (double) kernels[m+10][c][x][y];
 		        sum11 += imageCalc * (double) kernels[m+11][c][x][y];
@@ -360,7 +361,7 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
 		        sum13 += imageCalc * (double) kernels[m+13][c][x][y];
 		        sum14 += imageCalc * (double) kernels[m+14][c][x][y];
 		        sum15 += imageCalc * (double) kernels[m+15][c][x][y];
-              
+              }
 
             }
           }
