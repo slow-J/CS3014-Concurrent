@@ -325,14 +325,14 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
   double sum0, sum1, sum2, sum3, sum4, sum5, sum6, sum7, sum8, sum9, sum10, sum11, sum12, sum13, sum14, sum15, imageCalc;
   sum0 = sum1 = sum2 = sum3 = sum4 = sum5 = sum6 =sum7 = sum8 = sum9 = sum10 = sum11 = sum12 = sum13 = sum14 =sum15 = 0.0;
   // #pragma omp parallel shared(sum) 
-  #pragma omp parallel for if(nkernels>60) collapse(3) schedule(dynamic, 140) 
+  #pragma omp parallel for if(nkernels>60) collapse(3) schedule(dynamic, 140) private(h, w, x, y, c, m)
   for ( m = 0; m < nkernels; m+=16 ) //no of kernels
   {
     for ( w = 0; w < width; w++ ) 
     {
       for ( h = 0; h < height; h++ )
       {        
-        for ( c = 0; c < nchannels; c++ ) 
+        for ( c = 0; c < nchannels; c+=4 ) 
         {
         //size, if 3= 3x3 matrix    
           //#pragma omp simd
@@ -341,8 +341,12 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
             for  ( x = 0; x < kernel_order; x++) 
             {            
               //c = c1;
-              imageCalc = (double) image[w+x][h+y][c];
-
+              imageCalc0 = (double) image[w+x][h+y][c];
+              imageCalc1 = (double) image[w+x][h+y][c+1]; 
+              imageCalc2 = (double) image[w+x][h+y][c+2];
+              imageCalc3 = (double) image[w+x][h+y][c+3];
+              
+              // sum0 = sum0 mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels)
               
               sum0 += imageCalc * (double) kernels[m][c][x][y];
 		          sum1 += imageCalc * (double) kernels[m+1][c][x][y];
@@ -352,16 +356,15 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
 		          sum5 += imageCalc * (double) kernels[m+5][c][x][y];
 		          sum6 += imageCalc * (double) kernels[m+6][c][x][y];
 		          sum7 += imageCalc * (double) kernels[m+7][c][x][y];
-				    sum8 += imageCalc * (double) kernels[m+8][c][x][y];
-		        sum9 += imageCalc * (double) kernels[m+9][c][x][y];
-		        sum10 += imageCalc * (double) kernels[m+10][c][x][y];
-		        sum11 += imageCalc * (double) kernels[m+11][c][x][y];
-		        sum12 += imageCalc * (double) kernels[m+12][c][x][y];
-		        sum13 += imageCalc * (double) kernels[m+13][c][x][y];
-		        sum14 += imageCalc * (double) kernels[m+14][c][x][y];
-		        sum15 += imageCalc * (double) kernels[m+15][c][x][y];
-              
-
+				      sum8 += imageCalc * (double) kernels[m+8][c][x][y];
+		          sum9 += imageCalc * (double) kernels[m+9][c][x][y];
+		          sum10 += imageCalc * (double) kernels[m+10][c][x][y];
+		          sum11 += imageCalc * (double) kernels[m+11][c][x][y];
+		          sum12 += imageCalc * (double) kernels[m+12][c][x][y];
+		          sum13 += imageCalc * (double) kernels[m+13][c][x][y];
+		          sum14 += imageCalc * (double) kernels[m+14][c][x][y];
+		          sum15 += imageCalc * (double) kernels[m+15][c][x][y];
+//TODO idea for kerner_order=1 have 0 for all and else everything else
             }
           }
          // #pragma omp barrier
