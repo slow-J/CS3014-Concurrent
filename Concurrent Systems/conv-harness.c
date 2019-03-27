@@ -340,14 +340,14 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
           {
             for  ( x = 0; x < kernel_order; x++) 
             {            
-              //c = c1;
               imageCalc = (double) image[w+x][h+y][c];
               _m128 imageCalc0 = _mm_load_ps(image[w+x][h+y][c]); 
               _m128 imageCalc1 = _mm_load_ps(image[w+x][h+y][c+1]); 
               //imageCalc2 = (double) image[w+x][h+y][c+2];
               //imageCalc3 = (double) image[w+x][h+y][c+3];
               
-              // sum0 = sum0 mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels)
+              //dont look at this dunno what this is: sum0 = sum0 mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels)
+              
               // not too efficient but should work, could probably reduce the next 3 lines to 1
               _m128 0mult0 = _mm_mult_ps(imageCalc0, kernels[m][c][x][y]);
               _m128 0mult1 = _mm_mult_ps(imageCalc1, kernels[m][c+1][x][y]);
