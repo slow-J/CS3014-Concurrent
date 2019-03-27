@@ -37,7 +37,8 @@
 #include <math.h>
 #include <stdint.h>
 
-#include <x86intrin.h>
+// to compile with sse
+#include <x86intrin.h> 
 
 /* the following two definitions of DEBUGGING control whether or not
    debugging information is written out. To put the program into
@@ -332,22 +333,29 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
     {
       for ( h = 0; h < height; h++ )
       {        
-        for ( c = 0; c < nchannels; c+=4 ) 
+        for ( c = 0; c < nchannels; c+=2 ) 
         {
         //size, if 3= 3x3 matrix    
-          //#pragma omp simd
           for ( y = 0; y < kernel_order; y++ )
           {
             for  ( x = 0; x < kernel_order; x++) 
             {            
               //c = c1;
-              imageCalc0 = (double) image[w+x][h+y][c];
-              imageCalc1 = (double) image[w+x][h+y][c+1]; 
-              imageCalc2 = (double) image[w+x][h+y][c+2];
-              imageCalc3 = (double) image[w+x][h+y][c+3];
+              imageCalc = (double) image[w+x][h+y][c];
+              _m128 imageCalc0 = _mm_load_ps(image[w+x][h+y][c]); 
+              _m128 imageCalc1 = _mm_load_ps(image[w+x][h+y][c+1]); 
+              //imageCalc2 = (double) image[w+x][h+y][c+2];
+              //imageCalc3 = (double) image[w+x][h+y][c+3];
               
               // sum0 = sum0 mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels)
-              
+              // not too efficient but should work, could probably reduce the next 3 lines to 1
+              _m128 0mult0 = _mm_mult_ps(imageCalc0, kernels[m][c][x][y]);
+              _m128 0mult1 = _mm_mult_ps(imageCalc1, kernels[m][c+1][x][y]);
+              _m128 0add = _mm_add_ps(0mult, 0mult1);
+              // a probably quick way: this would some up vals in cvtss() double 0sum0 +=(double) _mm_cvtss_f32(0add);
+              double 0sum0 +=(double) 0add;
+              //above might work, if does, it is needed for all below
+
               sum0 += imageCalc * (double) kernels[m][c][x][y];
 		          sum1 += imageCalc * (double) kernels[m+1][c][x][y];
 		          sum2 += imageCalc * (double) kernels[m+2][c][x][y];
@@ -364,11 +372,13 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
 		          sum13 += imageCalc * (double) kernels[m+13][c][x][y];
 		          sum14 += imageCalc * (double) kernels[m+14][c][x][y];
 		          sum15 += imageCalc * (double) kernels[m+15][c][x][y];
-//TODO idea for kerner_order=1 have 0 for all and else everything else
+//TODO idea for kerner_order=1 have 0 for all x and y and else {the code we have}
             }
           }
          // #pragma omp barrier
         }
+        //output[m][w][h] = (float) 0sum0;
+        //possible thing from the pic i sent u _mm_storeu_ps(&|output[m][w][h], 0sum0);
         output[m][w][h] = (float) sum0;
         output[m+1][w][h] = (float) sum1;
         output[m+2][w][h] = (float) sum2;
@@ -377,7 +387,7 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
         output[m+5][w][h] = (float) sum5;
         output[m+6][w][h] = (float) sum6;
         output[m+7][w][h] = (float) sum7;    
-		output[m+8][w][h] = (float) sum8;
+		    output[m+8][w][h] = (float) sum8;
         output[m+9][w][h] = (float) sum9;
         output[m+10][w][h] = (float) sum10;
         output[m+11][w][h] = (float) sum11;
