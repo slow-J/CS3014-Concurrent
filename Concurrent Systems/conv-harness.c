@@ -1,31 +1,23 @@
 /* Test and timing harness program for developing a multichannel
    multikernel convolution (as used in deep learning networks)
-
    Note there are some simplifications around this implementation,
    in particular with respect to computing the convolution at edge
    pixels of the image.
-
    Author: David Gregg
    Date:   March 2019
-
    Version 1.6 : Modified the code so that the input tensor is float
-
    Version 1.5 : Modified the code so that the input and kernel
                  are tensors of 16-bit integer values
-
    Version 1.4 : Modified the random generator to reduce the range
                  of generated values;
-
    Version 1.3 : Fixed which loop variables were being incremented
                  in write_out();
                  Fixed dimensions of output and control_output 
                  matrices in main function
-
    Version 1.2 : Changed distribution of test data to (hopefully) 
                  eliminate random walk of floating point error;
                  Also introduced checks to restrict kernel-order to
                  a small set of values
-
    Version 1.1 : Fixed bug in code to create 4d matrix
 */
 
@@ -36,7 +28,8 @@
 #include <omp.h>
 #include <math.h>
 #include <stdint.h>
-
+#include <immintrin.h>
+#include <xmmintrin.h>
 // to compile with sse
 #include <x86intrin.h> 
 
@@ -318,21 +311,27 @@ void multichannel_conv(float *** image, int16_t **** kernels,
 
 /* the fast version of matmul written by the team */
 void team_conv(float *** image, int16_t **** kernels, float *** output,
-               int width, int height, int nchannels, int nkernels,
-               int kernel_order)
+ int width, int height, int nchannels, int nkernels,
+ int kernel_order)
 {
-  
+
   int h, w, x, y, c, m;
-  double sum0, sum1, sum2, sum3, sum4, sum5, sum6, sum7, sum8, sum9, sum10, sum11, sum12, sum13, sum14, sum15, imageCalc;
-  sum0 = sum1 = sum2 = sum3 = sum4 = sum5 = sum6 =sum7 = sum8 = sum9 = sum10 = sum11 = sum12 = sum13 = sum14 =sum15 = 0.0;
-  // #pragma omp parallel shared(sum) 
-  #pragma omp parallel for if(nkernels>60) collapse(3) schedule(dynamic, 140) private(h, w, x, y, c, m)
+  
+  #pragma omp parallel for if(nkernels>60) collapse(3) schedule(dynamic, 1) shared(h, w, x, y, c, m)
   for ( m = 0; m < nkernels; m+=16 ) //no of kernels
   {
     for ( w = 0; w < width; w++ ) 
     {
       for ( h = 0; h < height; h++ )
       {        
+        __m128d sum0 = _mm_set1_pd(0.0);
+        __m128d sum1 = _mm_set1_pd(0.0);
+        __m128d sum2 = _mm_set1_pd(0.0);
+        __m128d sum3 = _mm_set1_pd(0.0);
+        __m128d sum4 = _mm_set1_pd(0.0);
+        __m128d sum5 = _mm_set1_pd(0.0);
+        __m128d sum6 = _mm_set1_pd(0.0);
+        __m128d sum7 = _mm_set1_pd(0.0);
         for ( c = 0; c < nchannels; c+=2 ) 
         {
         //size, if 3= 3x3 matrix    
@@ -340,62 +339,70 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
           {
             for  ( x = 0; x < kernel_order; x++) 
             {            
-              imageCalc = (double) image[w+x][h+y][c];
-              _m128 imageCalc0 = _mm_load_ps(image[w+x][h+y][c]); 
-              _m128 imageCalc1 = _mm_load_ps(image[w+x][h+y][c+1]); 
-              //imageCalc2 = (double) image[w+x][h+y][c+2];
-              //imageCalc3 = (double) image[w+x][h+y][c+3];
-              
-              //dont look at this dunno what this is: sum0 = sum0 mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels) mm_add (imagecalc*kernels)
-              
-              // not too efficient but should work, could probably reduce the next 3 lines to 1
-              _m128 0mult0 = _mm_mult_ps(imageCalc0, kernels[m][c][x][y]);
-              _m128 0mult1 = _mm_mult_ps(imageCalc1, kernels[m][c+1][x][y]);
-              _m128 0add = _mm_add_ps(0mult, 0mult1);
-              // a probably quick way: this would some up vals in cvtss() double 0sum0 +=(double) _mm_cvtss_f32(0add);
-              double 0sum0 +=(double) 0add;
-              //above might work, if does, it is needed for all below
+              //image is calculated for both values of c
+              __m128d imageCalc = _mm_set1_pd((double)image[w+x][h+y][c]);
+              __m128d imageCalc1 = _mm_set1_pd((double)image[w+x][h+y][c+1]);
 
-              sum0 += imageCalc * (double) kernels[m][c][x][y];
-		          sum1 += imageCalc * (double) kernels[m+1][c][x][y];
-		          sum2 += imageCalc * (double) kernels[m+2][c][x][y];
-		          sum3 += imageCalc * (double) kernels[m+3][c][x][y];
-		          sum4 += imageCalc * (double) kernels[m+4][c][x][y];
-		          sum5 += imageCalc * (double) kernels[m+5][c][x][y];
-		          sum6 += imageCalc * (double) kernels[m+6][c][x][y];
-		          sum7 += imageCalc * (double) kernels[m+7][c][x][y];
-				      sum8 += imageCalc * (double) kernels[m+8][c][x][y];
-		          sum9 += imageCalc * (double) kernels[m+9][c][x][y];
-		          sum10 += imageCalc * (double) kernels[m+10][c][x][y];
-		          sum11 += imageCalc * (double) kernels[m+11][c][x][y];
-		          sum12 += imageCalc * (double) kernels[m+12][c][x][y];
-		          sum13 += imageCalc * (double) kernels[m+13][c][x][y];
-		          sum14 += imageCalc * (double) kernels[m+14][c][x][y];
-		          sum15 += imageCalc * (double) kernels[m+15][c][x][y];
-//TODO idea for kerner_order=1 have 0 for all x and y and else {the code we have}
+              //vectorised look ahead
+              __m128d kernel0 = _mm_setr_pd((double)kernels[m][c][x][y],(double) kernels[m+1][c][x][y]);
+              __m128d kernel1 = _mm_setr_pd((double)kernels[m+2][c][x][y],(double) kernels[m+3][c][x][y]);
+              __m128d kernel2 = _mm_setr_pd((double)kernels[m+4][c][x][y],(double) kernels[m+5][c][x][y]);
+              __m128d kernel3 = _mm_setr_pd((double)kernels[m+6][c][x][y],(double) kernels[m+7][c][x][y]);
+              __m128d kernel4 = _mm_setr_pd((double)kernels[m+8][c][x][y],(double) kernels[m+9][c][x][y]);
+              __m128d kernel5 = _mm_setr_pd((double)kernels[m+10][c][x][y],(double) kernels[m+11][c][x][y]);
+              __m128d kernel6 = _mm_setr_pd((double)kernels[m+12][c][x][y],(double) kernels[m+13][c][x][y]);
+              __m128d kernel7 = _mm_setr_pd((double)kernels[m+14][c][x][y],(double) kernels[m+15][c][x][y]);
+              
+              // each vector holds 2 doubles
+              sum0 = _mm_add_pd(sum0, _mm_mul_pd(imageCalc,kernel0));
+              sum1 = _mm_add_pd(sum1, _mm_mul_pd(imageCalc,kernel1));
+              sum2 = _mm_add_pd(sum2, _mm_mul_pd(imageCalc,kernel2));
+              sum3 = _mm_add_pd(sum3, _mm_mul_pd(imageCalc,kernel3));
+              sum4 = _mm_add_pd(sum4, _mm_mul_pd(imageCalc,kernel4));
+              sum5 = _mm_add_pd(sum5, _mm_mul_pd(imageCalc,kernel5));
+              sum6 = _mm_add_pd(sum6, _mm_mul_pd(imageCalc,kernel6));
+              sum7 = _mm_add_pd(sum7, _mm_mul_pd(imageCalc,kernel7));
+              
+              
+
+              __m128d kernel01 = _mm_setr_pd((double)kernels[m][c+1][x][y],(double) kernels[m+1][c+1][x][y]);
+              __m128d kernel11 = _mm_setr_pd((double)kernels[m+2][c+1][x][y],(double) kernels[m+3][c+1][x][y]);
+              __m128d kernel21 = _mm_setr_pd((double)kernels[m+4][c+1][x][y],(double) kernels[m+5][c+1][x][y]);
+              __m128d kernel31 = _mm_setr_pd((double)kernels[m+6][c+1][x][y],(double) kernels[m+7][c+1][x][y]);
+              __m128d kernel41 = _mm_setr_pd((double)kernels[m+8][c+1][x][y],(double) kernels[m+9][c+1][x][y]);
+              __m128d kernel51 = _mm_setr_pd((double)kernels[m+10][c+1][x][y],(double) kernels[m+11][c+1][x][y]);
+              __m128d kernel61 = _mm_setr_pd((double)kernels[m+12][c+1][x][y],(double) kernels[m+13][c+1][x][y]);
+              __m128d kernel71 = _mm_setr_pd((double)kernels[m+14][c+1][x][y],(double) kernels[m+15][c+1][x][y]);
+
+              sum0 = _mm_add_pd(sum0, _mm_mul_pd(imageCalc1,kernel01));
+              sum1 = _mm_add_pd(sum1, _mm_mul_pd(imageCalc1,kernel11));
+              sum2 = _mm_add_pd(sum2, _mm_mul_pd(imageCalc1,kernel21));
+              sum3 = _mm_add_pd(sum3, _mm_mul_pd(imageCalc1,kernel31));
+              sum4 = _mm_add_pd(sum4, _mm_mul_pd(imageCalc1,kernel41));
+              sum5 = _mm_add_pd(sum5, _mm_mul_pd(imageCalc1,kernel51));
+              sum6 = _mm_add_pd(sum6, _mm_mul_pd(imageCalc1,kernel61));
+              sum7 = _mm_add_pd(sum7, _mm_mul_pd(imageCalc1,kernel71));
+
             }
           }
-         // #pragma omp barrier
         }
-        //output[m][w][h] = (float) 0sum0;
-        //possible thing from the pic i sent u _mm_storeu_ps(&|output[m][w][h], 0sum0);
-        output[m][w][h] = (float) sum0;
-        output[m+1][w][h] = (float) sum1;
-        output[m+2][w][h] = (float) sum2;
-        output[m+3][w][h] = (float) sum3;
-        output[m+4][w][h] = (float) sum4;
-        output[m+5][w][h] = (float) sum5;
-        output[m+6][w][h] = (float) sum6;
-        output[m+7][w][h] = (float) sum7;    
-		    output[m+8][w][h] = (float) sum8;
-        output[m+9][w][h] = (float) sum9;
-        output[m+10][w][h] = (float) sum10;
-        output[m+11][w][h] = (float) sum11;
-        output[m+12][w][h] = (float) sum12;
-        output[m+13][w][h] = (float) sum13;
-        output[m+14][w][h] = (float) sum14;
-        output[m+15][w][h] = (float) sum15;   
-        sum0 = sum1 = sum2 = sum3 = sum4 = sum5 = sum6 =sum7 = sum8 = sum9 = sum10 = sum11 = sum12 = sum13 = sum14 =sum15 = 0.0;
+        output[m][w][h] =  sum0[0];
+        output[m+1][w][h] = sum0[1];
+        output[m+2][w][h] = sum1[0];
+        output[m+3][w][h] = sum1[1];
+        output[m+4][w][h] = sum2[0];
+        output[m+5][w][h] = sum2[1];
+        output[m+6][w][h] = sum3[0];
+        output[m+7][w][h] = sum3[1];    
+        output[m+8][w][h] = sum4[0];
+        output[m+9][w][h] = sum4[1];
+        output[m+10][w][h] = sum5[0];
+        output[m+11][w][h] = sum5[1];
+        output[m+12][w][h] = sum6[0];
+        output[m+13][w][h] = sum6[1];
+        output[m+14][w][h] = sum7[0];
+        output[m+15][w][h] = sum7[1];  
+
       }
     }
   }
@@ -472,3 +479,4 @@ int main(int argc, char ** argv)
 
   return 0;
 }
+
