@@ -324,6 +324,7 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
     {
       for ( h = 0; h < height; h++ )
       {        
+        //initialising to 0
         __m128d sum0 = _mm_set1_pd(0.0);
         __m128d sum1 = _mm_set1_pd(0.0);
         __m128d sum2 = _mm_set1_pd(0.0);
@@ -364,7 +365,7 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
               sum7 = _mm_add_pd(sum7, _mm_mul_pd(imageCalc,kernel7));
               
               
-
+              // code duplicated to get a second round of sum calculations
               __m128d kernel01 = _mm_setr_pd((double)kernels[m][c+1][x][y],(double) kernels[m+1][c+1][x][y]);
               __m128d kernel11 = _mm_setr_pd((double)kernels[m+2][c+1][x][y],(double) kernels[m+3][c+1][x][y]);
               __m128d kernel21 = _mm_setr_pd((double)kernels[m+4][c+1][x][y],(double) kernels[m+5][c+1][x][y]);
@@ -386,6 +387,7 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
             }
           }
         }
+        // sum[0] accesses the first element of sum vector and sum[1] the second
         output[m][w][h] =  sum0[0];
         output[m+1][w][h] = sum0[1];
         output[m+2][w][h] = sum1[0];
