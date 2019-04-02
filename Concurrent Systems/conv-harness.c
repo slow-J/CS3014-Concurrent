@@ -317,6 +317,7 @@ void team_conv(float *** image, int16_t **** kernels, float *** output,
 
   int h, w, x, y, c, m;
   
+  // OpenMP parallelising the for loops
   #pragma omp parallel for if(nkernels>60) collapse(3) schedule(dynamic, 1) shared(h, w, x, y, c, m)
   for ( m = 0; m < nkernels; m+=16 ) //no of kernels
   {
